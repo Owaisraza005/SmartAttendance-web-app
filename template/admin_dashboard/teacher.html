@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartAttend - Teacher Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-color: #0a0a18;
+            transition: background-color 1.5s ease, background-image 1.5s ease;
+        }
+        body.day-mode {
+            background-image: linear-gradient(135deg, #fddb92 0%, #d1fdff 100%);
+        }
+        #webgl-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+        }
+        #ui-container {
+            position: relative; z-index: 1;
+            display: flex;
+            min-height: 100vh;
+        }
+        .card-glass {
+            background: rgba(10, 10, 24, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background 1.5s ease, border 1.5s ease;
+        }
+        body.day-mode .card-glass {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+        .card-hover-effect {
+            transition: transform 0.4s ease-out, box-shadow 0.4s ease-out;
+            transform-style: preserve-3d;
+        }
+        .card-hover-effect:hover {
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), 0 0 40px rgba(0, 150, 255, 0.2);
+            border-color: rgba(0, 255, 255, 0.3);
+            transform: translateY(-8px) scale(1.02);
+        }
+        body.day-mode .card-hover-effect:hover {
+            box-shadow: 0 0 20px rgba(251, 146, 60, 0.3), 0 0 40px rgba(251, 146, 60, 0.1);
+            border-color: rgba(251, 146, 60, 0.7);
+        }
+        .text-theme { color: #e5e7eb; transition: color 1.5s ease; }
+        body.day-mode .text-theme { color: #4a2c0f; }
+        .subtext-theme { color: #9ca3af; transition: color 1.5s ease; }
+        body.day-mode .subtext-theme { color: #78350f; }
+        .icon-theme { color: #22d3ee; transition: color 1.5s ease; }
+        body.day-mode .icon-theme { color: #f97316; }
+        .message-box {
+            transition: opacity 0.3s ease-in-out, transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        .sidebar-link.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left-color: #06b6d4;
+        }
+        body.day-mode .sidebar-link.active {
+             background-color: rgba(251, 146, 60, 0.1);
+             border-left-color: #f97316;
+        }
+        .hidden { display: none; }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .sidebar-toggle {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 60;
+            padding: 0.5rem;
+            background-color: rgba(10, 10, 24, 0.5);
+            backdrop-filter: blur(8px);
+            border-radius: 9999px;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+        }
+        @media (min-width: 768px) {
+            .sidebar-toggle {
+                display: none;
+            }
+            #sidebar {
+                transform: translateX(0) !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="webgl-canvas"></canvas>
+    
+    <div id="ui-container">
+        <!-- Sidebar Navigation -->
+        <button id="sidebar-toggle-btn" class="sidebar-toggle md:hidden">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div id="sidebar-overlay" class="hidden md:hidden"></div>
+
+        <aside id="sidebar" class="w-64 h-screen fixed top-0 left-0 bg-gray-900/50 backdrop-blur-md p-6 border-r border-gray-700/50 z-50 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+            <h1 class="text-2xl font-bold text-white mb-8">Admin Panel</h1>
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-home text-cyan-400"></i>Dashboard</a></li>
+                    <li><a href="Students.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-user-graduate text-cyan-400"></i>Students</a></li>
+                    <li><a href="#" class="sidebar-link active block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-chalkboard-teacher text-cyan-400"></i>Teachers</a></li>
+                    <li><a href="Courses.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-book text-cyan-400"></i>Courses</a></li>
+                    <li><a href="Subjects.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-clipboard-list text-cyan-400"></i>Subjects</a></li>
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-link text-cyan-400"></i>Assignments</a></li>
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-calendar-check text-cyan-400"></i>Attendance</a></li>
+                </ul>
+            </nav>
+            <div class="mt-auto pt-6 flex flex-col items-start">
+                <button id="mode-toggle" class="p-2 rounded-full bg-white/20 backdrop-blur-sm focus:outline-none text-white transition-colors">
+                    <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 p-4 sm:p-6 md:p-8 ml-0 md:ml-64 overflow-y-auto">
+            <header class="mb-6 md:mb-8 pl-16 md:pl-0">
+                <h1 class="text-3xl sm:text-4xl font-bold text-theme">Teacher Management</h1>
+                <p class="subtext-theme text-sm sm:text-base">Register and manage your school's teachers.</p>
+            </header>
+
+            <!-- Teacher Management Section -->
+            <section id="teacher-management" class="page-content">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                    <h2 class="text-xl sm:text-2xl font-semibold text-theme">Available Teachers</h2>
+                    <button id="add-teacher-btn" class="mt-4 sm:mt-0 px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Add New Teacher</button>
+                </div>
+
+                <div id="add-teacher-form-container" class="grid grid-cols-1 mb-8 hidden">
+                    <div class="card-glass p-6 rounded-xl">
+                        <h3 class="text-xl font-semibold text-theme mb-4">Register New Teacher</h3>
+                        <form id="teacher-form" class="space-y-4">
+                            <div>
+                                <label for="teacher-name" class="block subtext-theme">Teacher Name</label>
+                                <input type="text" id="teacher-name" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label for="teacher-phone" class="block subtext-theme">Phone No.</label>
+                                <input type="tel" id="teacher-phone" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label for="teacher-id" class="block subtext-theme">Teacher ID</label>
+                                <input type="text" id="teacher-id" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label for="teacher-email" class="block subtext-theme">Email ID</label>
+                                <input type="email" id="teacher-email" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div class="flex justify-end space-x-4">
+                                <button type="button" id="cancel-add-teacher" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Add Teacher</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Search Bar -->
+                <div class="card-glass p-6 rounded-xl mb-8">
+                    <h3 class="text-xl font-semibold text-theme mb-4">Search Teachers</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="search-teacher-id" class="block subtext-theme">Teacher ID</label>
+                            <input type="text" id="search-teacher-id" class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                        </div>
+                        <div>
+                            <label for="search-teacher-name" class="block subtext-theme">Teacher Name</label>
+                            <input type="text" id="search-teacher-name" class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-4 mt-4">
+                        <button id="reset-search-btn" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Reset</button>
+                        <button id="search-btn" class="px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Search</button>
+                    </div>
+                </div>
+
+                <!-- Teacher Table -->
+                <div class="card-glass p-6 rounded-xl overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-gray-800/50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Phone No.</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Teacher ID</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email ID</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teacher-table-body" class="bg-gray-900/50 divide-y divide-gray-700">
+                            <!-- Teacher rows will be dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <!-- Modals -->
+    <div id="teacher-edit-modal" class="modal hidden">
+        <div class="card-glass p-8 rounded-2xl w-full max-w-md">
+            <h3 class="text-2xl font-semibold text-theme mb-4">Edit Teacher</h3>
+            <form id="edit-teacher-form" class="space-y-4">
+                <input type="hidden" id="edit-teacher-doc-id">
+                <div>
+                    <label for="edit-teacher-name" class="block subtext-theme">Teacher Name</label>
+                    <input type="text" id="edit-teacher-name" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div>
+                    <label for="edit-teacher-phone" class="block subtext-theme">Phone No.</label>
+                    <input type="tel" id="edit-teacher-phone" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div>
+                    <label for="edit-teacher-id" class="block subtext-theme">Teacher ID</label>
+                    <input type="text" id="edit-teacher-id" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div>
+                    <label for="edit-teacher-email" class="block subtext-theme">Email ID</label>
+                    <input type="email" id="edit-teacher-email" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancel-teacher-edit" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="confirmation-modal" class="modal hidden">
+        <div class="card-glass p-8 rounded-2xl w-full max-w-sm text-center">
+            <h3 id="confirmation-title" class="text-xl font-semibold text-theme mb-4">Are you sure?</h3>
+            <p id="confirmation-message" class="subtext-theme mb-6">Do you want to delete this record?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                <button id="confirm-proceed" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast message for notifications -->
+    <div id="message-box" class="message-box fixed top-5 right-1/2 translate-x-1/2 bg-gray-900/80 backdrop-blur-sm text-white py-3 px-5 rounded-lg shadow-xl opacity-0 transform -translate-y-10 pointer-events-none z-30">
+        <p id="message-text"></p>
+    </div>
+
+    <script>
+        // --- Global State & DOM Elements ---
+        let scene, camera, renderer, particles, lines;
+        const mouse = new THREE.Vector2();
+        let particlesArray = [];
+        const PARTICLE_COUNT = 2000;
+        const LINE_DISTANCE_THRESHOLD = 0.8;
+        let isDayMode = false;
+        
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        
+        const modeToggle = document.getElementById('mode-toggle');
+        const sidebarLinks = document.querySelectorAll('.sidebar-link');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+        const teacherForm = document.getElementById('teacher-form');
+        const teacherTableBody = document.getElementById('teacher-table-body');
+        const teacherEditModal = document.getElementById('teacher-edit-modal');
+        const editTeacherForm = document.getElementById('edit-teacher-form');
+        const cancelTeacherEditBtn = document.getElementById('cancel-teacher-edit');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmMessage = document.getElementById('confirmation-message');
+        const confirmCancelBtn = document.getElementById('confirm-cancel');
+        const confirmProceedBtn = document.getElementById('confirm-proceed');
+
+        const addTeacherBtn = document.getElementById('add-teacher-btn');
+        const addTeacherFormContainer = document.getElementById('add-teacher-form-container');
+        const cancelAddTeacherBtn = document.getElementById('cancel-add-teacher');
+        
+        const searchTeacherIdInput = document.getElementById('search-teacher-id');
+        const searchTeacherNameInput = document.getElementById('search-teacher-name');
+        const searchBtn = document.getElementById('search-btn');
+        const resetSearchBtn = document.getElementById('reset-search-btn');
+
+        // In-memory data storage for demonstration
+        let teachers = [
+            { id: 'T1', name: 'Dr. Evans', phone: '9876543210', teacherId: 'TCH_001', email: 'evans@example.com' },
+            { id: 'T2', name: 'Prof. Miller', phone: '0123456789', teacherId: 'TCH_002', email: 'miller@example.com' }
+        ];
+
+        // --- Helper Functions ---
+        function showMessage(message, duration = 3000) {
+            clearTimeout(window.messageTimeout);
+            messageText.textContent = message;
+            messageBox.classList.remove('opacity-0', '-translate-y-10');
+            messageBox.classList.add('opacity-100', 'translate-y-0');
+            window.messageTimeout = setTimeout(() => {
+                messageBox.classList.remove('opacity-100', 'translate-y-0');
+                messageBox.classList.add('opacity-0', '-translate-y-10');
+            }, duration);
+        }
+
+        function showConfirmation(message, onConfirm) {
+            confirmMessage.textContent = message;
+            confirmationModal.classList.remove('hidden');
+            
+            const handleProceed = () => {
+                onConfirm();
+                confirmationModal.classList.add('hidden');
+                confirmProceedBtn.removeEventListener('click', handleProceed);
+            };
+
+            const handleCancel = () => {
+                confirmationModal.classList.add('hidden');
+                confirmCancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            confirmProceedBtn.addEventListener('click', handleProceed);
+            confirmCancelBtn.addEventListener('click', handleCancel);
+        }
+
+        function openModal(modalId, docId, data) {
+            const modal = document.getElementById(modalId);
+            const form = modal.querySelector('form');
+            form.reset();
+            const docIdInput = form.querySelector(`#edit-teacher-doc-id`);
+            docIdInput.value = docId;
+            
+            form.querySelector('#edit-teacher-name').value = data.name;
+            form.querySelector('#edit-teacher-phone').value = data.phone;
+            form.querySelector('#edit-teacher-id').value = data.teacherId;
+            form.querySelector('#edit-teacher-email').value = data.email;
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // --- Data Management Functions ---
+        function addTeacher(teacher) {
+            teacher.id = crypto.randomUUID(); // Generate a unique ID
+            teachers.push(teacher);
+            renderTeachers();
+            showMessage('Teacher added successfully!');
+        }
+
+        function updateTeacher(teacherId, data) {
+            const index = teachers.findIndex(t => t.id === teacherId);
+            if (index !== -1) {
+                teachers[index].name = data.name;
+                teachers[index].phone = data.phone;
+                teachers[index].teacherId = data.teacherId;
+                teachers[index].email = data.email;
+                renderTeachers();
+                showMessage('Teacher updated successfully!');
+            }
+        }
+
+        function deleteTeacher(teacherId) {
+            showConfirmation("Are you sure you want to delete this teacher?", () => {
+                const index = teachers.findIndex(t => t.id === teacherId);
+                if (index !== -1) {
+                    teachers.splice(index, 1);
+                    renderTeachers();
+                    showMessage('Teacher deleted successfully!');
+                }
+            });
+        }
+        
+        // --- Data Rendering Functions ---
+        function renderTeachers(filteredTeachers = teachers) {
+            teacherTableBody.innerHTML = '';
+            filteredTeachers.forEach(teacher => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-white">${teacher.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${teacher.phone}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${teacher.teacherId}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${teacher.email}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium space-x-2">
+                        <button onclick="editTeacher('${teacher.id}', '${teacher.name}', '${teacher.phone}', '${teacher.teacherId}', '${teacher.email}')" class="text-indigo-500 hover:text-indigo-700">Edit</button>
+                        <button onclick="deleteTeacher('${teacher.id}')" class="text-red-500 hover:text-red-700">Delete</button>
+                    </td>
+                `;
+                teacherTableBody.appendChild(row);
+            });
+        }
+
+        function editTeacher(docId, name, phone, teacherId, email) {
+            openModal('teacher-edit-modal', docId, { 'name': name, 'phone': phone, 'teacherId': teacherId, 'email': email });
+        }
+        
+        // --- Event Handlers ---
+        addTeacherBtn.addEventListener('click', () => {
+            addTeacherFormContainer.classList.remove('hidden');
+        });
+
+        cancelAddTeacherBtn.addEventListener('click', () => {
+            addTeacherFormContainer.classList.add('hidden');
+            teacherForm.reset();
+        });
+
+        teacherForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newTeacher = {
+                name: teacherForm.querySelector('#teacher-name').value,
+                phone: teacherForm.querySelector('#teacher-phone').value,
+                teacherId: teacherForm.querySelector('#teacher-id').value,
+                email: teacherForm.querySelector('#teacher-email').value,
+            };
+            addTeacher(newTeacher);
+            teacherForm.reset();
+            addTeacherFormContainer.classList.add('hidden');
+        });
+
+        editTeacherForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const docId = editTeacherForm.querySelector('#edit-teacher-doc-id').value;
+            const updatedData = {
+                name: editTeacherForm.querySelector('#edit-teacher-name').value,
+                phone: editTeacherForm.querySelector('#edit-teacher-phone').value,
+                teacherId: editTeacherForm.querySelector('#edit-teacher-id').value,
+                email: editTeacherForm.querySelector('#edit-teacher-email').value,
+            };
+            updateTeacher(docId, updatedData);
+            closeModal('teacher-edit-modal');
+        });
+        cancelTeacherEditBtn.addEventListener('click', () => closeModal('teacher-edit-modal'));
+        
+        searchBtn.addEventListener('click', () => {
+            const teacherIdQuery = searchTeacherIdInput.value.toLowerCase();
+            const teacherNameQuery = searchTeacherNameInput.value.toLowerCase();
+            
+            const filtered = teachers.filter(teacher => {
+                const idMatch = teacher.teacherId.toLowerCase().includes(teacherIdQuery);
+                const nameMatch = teacher.name.toLowerCase().includes(teacherNameQuery);
+                return idMatch && nameMatch;
+            });
+            renderTeachers(filtered);
+            showMessage(`Found ${filtered.length} teachers.`);
+        });
+        
+        resetSearchBtn.addEventListener('click', () => {
+            searchTeacherIdInput.value = '';
+            searchTeacherNameInput.value = '';
+            renderTeachers();
+            showMessage('Search filters reset.');
+        });
+
+        // --- 3D Scene and Animations (from provided theme) ---
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+            renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#webgl-canvas'), antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            const particlesGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(PARTICLE_COUNT * 3);
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const x = (Math.random() - 0.5) * 20;
+                const y = (Math.random() - 0.5) * 20;
+                const z = (Math.random() - 0.5) * 20;
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+                particlesArray.push({ x, y, z, originalX: x, originalY: y, originalZ: z, velocityX: 0, velocityY: 0, velocityZ: 0 });
+            }
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const particlesMaterial = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.03, blending: THREE.AdditiveBlending, transparent: true, sizeAttenuation: true });
+            particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            scene.add(particles);
+
+            const lineGeometry = new THREE.BufferGeometry();
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending });
+            lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+            scene.add(lines);
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+            modeToggle.addEventListener('click', toggleMode);
+            
+            animate();
+        }
+
+        function toggleMode() {
+            isDayMode = !isDayMode;
+            document.body.classList.toggle('day-mode');
+            document.getElementById('sun-icon').classList.toggle('hidden');
+            document.getElementById('moon-icon').classList.toggle('hidden');
+            
+            const particleColor = isDayMode ? new THREE.Color(0xffa500) : new THREE.Color(0x00ffff);
+            const lineColor = isDayMode ? new THREE.Color(0xffd700) : new THREE.Color(0x00ffff);
+            particles.material.color.set(particleColor);
+            lines.material.color.set(lineColor);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const positions = particles.geometry.attributes.position.array;
+            const linePositions = [];
+            const mouse3D = new THREE.Vector3(mouse.x * 10, mouse.y * 10, 0);
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const p = particlesArray[i];
+                const dx = mouse3D.x - p.x;
+                const dy = mouse3D.y - p.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 2) {
+                    const force = (2 - dist) * 0.03;
+                    p.velocityX += (p.x - mouse3D.x) * force;
+                    p.velocityY += (p.y - mouse3D.y) * force;
+                }
+                p.velocityX += (p.originalX - p.x) * 0.001;
+                p.velocityY += (p.originalY - p.y) * 0.001;
+                p.velocityZ += (p.originalZ - p.z) * 0.001;
+                p.x += p.velocityX; p.y += p.velocityY; p.z += p.velocityZ;
+                p.velocityX *= 0.95; p.velocityY *= 0.95; p.velocityZ *= 0.95;
+                positions[i * 3] = p.x; positions[i * 3 + 1] = p.y; positions[i * 3 + 2] = p.z;
+
+                for (let j = i + 1; j < PARTICLE_COUNT; j++) {
+                    const p2 = particlesArray[j];
+                    const d = Math.sqrt(Math.pow(p.x - p2.x, 2) + Math.pow(p.y - p2.y, 2) + Math.pow(p.z - p2.z, 2));
+                    if (d < LINE_DISTANCE_THRESHOLD) {
+                        linePositions.push(p.x, p.y, p.z, p2.x, p2.y, p2.z);
+                    }
+                }
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+            lines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+            
+            camera.position.x += (mouse.x * 0.5 - camera.position.x) * 0.05;
+            camera.position.y += (mouse.y * 0.5 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+            renderer.render(scene, camera);
+        }
+
+        // --- App Initialization ---
+        window.onload = () => {
+            init3D();
+            renderTeachers();
+        };
+    </script>
+</body>
+</html>
