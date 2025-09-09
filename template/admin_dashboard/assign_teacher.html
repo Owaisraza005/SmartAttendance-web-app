@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartAttend - Assign Teacher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-color: #0a0a18;
+            transition: background-color 1.5s ease, background-image 1.5s ease;
+        }
+        body.day-mode {
+            background-image: linear-gradient(135deg, #fddb92 0%, #d1fdff 100%);
+        }
+        #webgl-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+        }
+        #ui-container {
+            position: relative; z-index: 1;
+            display: flex;
+            min-height: 100vh;
+        }
+        .card-glass {
+            background: rgba(10, 10, 24, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background 1.5s ease, border 1.5s ease;
+        }
+        body.day-mode .card-glass {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+        .card-hover-effect {
+            transition: transform 0.4s ease-out, box-shadow 0.4s ease-out;
+            transform-style: preserve-3d;
+        }
+        .card-hover-effect:hover {
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), 0 0 40px rgba(0, 150, 255, 0.2);
+            border-color: rgba(0, 255, 255, 0.3);
+            transform: translateY(-8px) scale(1.02);
+        }
+        body.day-mode .card-hover-effect:hover {
+            box-shadow: 0 0 20px rgba(251, 146, 60, 0.3), 0 0 40px rgba(251, 146, 60, 0.1);
+            border-color: rgba(251, 146, 60, 0.7);
+        }
+        .text-theme { color: #e5e7eb; transition: color 1.5s ease; }
+        body.day-mode .text-theme { color: #4a2c0f; }
+        .subtext-theme { color: #9ca3af; transition: color 1.5s ease; }
+        body.day-mode .subtext-theme { color: #78350f; }
+        .icon-theme { color: #22d3ee; transition: color 1.5s ease; }
+        body.day-mode .icon-theme { color: #f97316; }
+        .message-box {
+            transition: opacity 0.3s ease-in-out, transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        .sidebar-link.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left-color: #06b6d4;
+        }
+        body.day-mode .sidebar-link.active {
+             background-color: rgba(251, 146, 60, 0.1);
+             border-left-color: #f97316;
+        }
+        .hidden { display: none; }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .sidebar-toggle {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 60;
+            padding: 0.5rem;
+            background-color: rgba(10, 10, 24, 0.5);
+            backdrop-filter: blur(8px);
+            border-radius: 9999px;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+        }
+        @media (min-width: 768px) {
+            .sidebar-toggle {
+                display: none;
+            }
+            #sidebar {
+                transform: translateX(0) !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="webgl-canvas"></canvas>
+    
+    <div id="ui-container">
+        <!-- Sidebar Navigation -->
+        <button id="sidebar-toggle-btn" class="sidebar-toggle md:hidden">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div id="sidebar-overlay" class="hidden md:hidden"></div>
+
+        <aside id="sidebar" class="w-64 h-screen fixed top-0 left-0 bg-gray-900/50 backdrop-blur-md p-6 border-r border-gray-700/50 z-50 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+            <h1 class="text-2xl font-bold text-white mb-8">Admin Panel</h1>
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-home text-cyan-400"></i>Dashboard</a></li>
+                    <li><a href="Students.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-user-graduate text-cyan-400"></i>Students</a></li>
+                    <li><a href="Teachers.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-chalkboard-teacher text-cyan-400"></i>Teachers</a></li>
+                    <li><a href="Courses.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-book text-cyan-400"></i>Courses</a></li>
+                    <li><a href="Subjects.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-clipboard-list text-cyan-400"></i>Subjects</a></li>
+                    <li><a href="#" class="sidebar-link active block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-link text-cyan-400"></i>Assignments</a></li>
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-calendar-check text-cyan-400"></i>Attendance</a></li>
+                </ul>
+            </nav>
+            <div class="mt-auto pt-6 flex flex-col items-start">
+                <button id="mode-toggle" class="p-2 rounded-full bg-white/20 backdrop-blur-sm focus:outline-none text-white transition-colors">
+                    <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 p-4 sm:p-6 md:p-8 ml-0 md:ml-64 overflow-y-auto">
+            <header class="mb-6 md:mb-8 pl-16 md:pl-0">
+                <h1 class="text-3xl sm:text-4xl font-bold text-theme">Assign Teachers</h1>
+                <p class="subtext-theme text-sm sm:text-base">Assign teachers to courses and subjects.</p>
+            </header>
+
+            <!-- Assign Teacher Section -->
+            <section id="assign-teacher-management" class="page-content">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                    <h2 class="text-xl sm:text-2xl font-semibold text-theme">Teacher Assignments</h2>
+                    <button id="add-assignment-btn" class="mt-4 sm:mt-0 px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Assign New Teacher</button>
+                </div>
+
+                <div id="add-assignment-form-container" class="grid grid-cols-1 mb-8 hidden">
+                    <div class="card-glass p-6 rounded-xl">
+                        <h3 class="text-xl font-semibold text-theme mb-4">Assign Teachers to Subjects</h3>
+                        <form id="assignment-form" class="space-y-4">
+                            <div>
+                                <label for="assign-course-select" class="block subtext-theme">Select Course</label>
+                                <select id="assign-course-select" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                                    <option value="">-- Select Course --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="assign-semester-select" class="block subtext-theme">Select Semester</label>
+                                <select id="assign-semester-select" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                                    <option value="">-- Select Semester --</option>
+                                </select>
+                            </div>
+
+                            <div id="subjects-for-assignment" class="overflow-x-auto hidden">
+                                <h4 class="text-lg font-semibold text-theme mb-2">Subjects in this Semester</h4>
+                                <table class="min-w-full divide-y divide-gray-700">
+                                    <thead class="bg-gray-800/50">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Subject Name & ID</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Assign Teacher</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="assign-subjects-table-body" class="bg-gray-900/50 divide-y divide-gray-700">
+                                        <!-- Subjects with dropdowns will be dynamically rendered here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="flex justify-end space-x-4 mt-4">
+                                <button type="button" id="cancel-add-assignment" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                                <button type="submit" id="submit-assignments-btn" class="px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition" disabled>Assign Teachers</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Assignment Table -->
+                <div class="card-glass p-6 rounded-xl overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-gray-800/50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Course & Semester</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Assignments (Subject & Teacher)</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="assignments-table-body" class="bg-gray-900/50 divide-y divide-gray-700">
+                            <!-- Assignment rows will be dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <!-- Modals -->
+    <div id="confirmation-modal" class="modal hidden">
+        <div class="card-glass p-8 rounded-2xl w-full max-w-sm text-center">
+            <h3 id="confirmation-title" class="text-xl font-semibold text-theme mb-4">Are you sure?</h3>
+            <p id="confirmation-message" class="subtext-theme mb-6">Do you want to delete this record?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                <button id="confirm-proceed" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition">Delete</button>
+            </div>
+        </div>
+    </div>
+    <div id="edit-assignment-modal" class="modal hidden">
+        <div class="card-glass p-8 rounded-2xl w-full max-w-lg mx-4">
+            <h3 class="text-2xl font-semibold text-theme mb-4">Edit Assignment Group</h3>
+            <p class="subtext-theme mb-4" id="edit-group-info"></p>
+            <form id="edit-assignment-form" class="space-y-4">
+                <input type="hidden" id="edit-assignment-doc-id">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-gray-800/50">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Subject Name & ID</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Assign Teacher</th>
+                            </tr>
+                        </thead>
+                        <tbody id="edit-assign-subjects-table-body" class="bg-gray-900/50 divide-y divide-gray-700">
+                            <!-- Subjects with dropdowns will be dynamically rendered here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancel-edit-assignment" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- Toast message for notifications -->
+    <div id="message-box" class="message-box fixed top-5 right-1/2 translate-x-1/2 bg-gray-900/80 backdrop-blur-sm text-white py-3 px-5 rounded-lg shadow-xl opacity-0 transform -translate-y-10 pointer-events-none z-30">
+        <p id="message-text"></p>
+    </div>
+
+    <script>
+        // --- Global State & DOM Elements ---
+        let scene, camera, renderer, particles, lines;
+        const mouse = new THREE.Vector2();
+        let particlesArray = [];
+        const PARTICLE_COUNT = 2000;
+        const LINE_DISTANCE_THRESHOLD = 0.8;
+        let isDayMode = false;
+        
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        
+        const modeToggle = document.getElementById('mode-toggle');
+        const sidebarLinks = document.querySelectorAll('.sidebar-link');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+        const addAssignmentBtn = document.getElementById('add-assignment-btn');
+        const addAssignmentFormContainer = document.getElementById('add-assignment-form-container');
+        const cancelAddAssignmentBtn = document.getElementById('cancel-add-assignment');
+        const assignmentForm = document.getElementById('assignment-form');
+        const submitAssignmentsBtn = document.getElementById('submit-assignments-btn');
+        
+        const assignCourseSelect = document.getElementById('assign-course-select');
+        const assignSemesterSelect = document.getElementById('assign-semester-select');
+        const assignSubjectsTableBody = document.getElementById('assign-subjects-table-body');
+        const subjectsForAssignmentDiv = document.getElementById('subjects-for-assignment');
+        
+        const assignmentsTableBody = document.getElementById('assignments-table-body');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmMessage = document.getElementById('confirmation-message');
+        const confirmCancelBtn = document.getElementById('confirm-cancel');
+        const confirmProceedBtn = document.getElementById('confirm-proceed');
+        
+        const editAssignmentModal = document.getElementById('edit-assignment-modal');
+        const editAssignmentForm = document.getElementById('edit-assignment-form');
+        const cancelEditAssignmentBtn = document.getElementById('cancel-edit-assignment');
+        const editAssignTeacherSelect = document.getElementById('edit-assign-teacher-select');
+        const editAssignCourseSelect = document.getElementById('edit-assign-course-select');
+        const editAssignSemesterSelect = document.getElementById('edit-assign-semester-select');
+        const editAssignSubjectSelect = document.getElementById('edit-assign-subject-select');
+
+        // In-memory data storage for demonstration
+        let teachers = [
+            { id: 'T1', name: 'Dr. Evans', teacherId: 'TCH_001' },
+            { id: 'T2', name: 'Prof. Miller', teacherId: 'TCH_002' }
+        ];
+
+        let courses = [
+            { id: 'C1', name: 'Computer Science', courseId: 'CS101' },
+            { id: 'C2', name: 'Mathematics', courseId: 'MTH202' }
+        ];
+
+        let subjects = [
+            { id: 'S1', name: 'Data Structures', course: 'Computer Science', semester: 'Semester 3', subjectId: 'CS301' },
+            { id: 'S2', name: 'Linear Algebra', course: 'Mathematics', semester: 'Semester 1', subjectId: 'MTH101' },
+            { id: 'S3', name: 'Calculus', course: 'Mathematics', semester: 'Semester 1', subjectId: 'MTH102' },
+            { id: 'S4', name: 'Object-Oriented Programming', course: 'Computer Science', semester: 'Semester 3', subjectId: 'CS302' }
+        ];
+        
+        let assignments = [
+            { id: 'A1', teacherName: 'Dr. Evans', teacherId: 'TCH_001', courseName: 'Computer Science', semesterName: 'Semester 3', subjectName: 'Data Structures' },
+            { id: 'A2', teacherName: 'Prof. Miller', teacherId: 'TCH_002', courseName: 'Mathematics', semesterName: 'Semester 1', subjectName: 'Linear Algebra' },
+            { id: 'A3', teacherName: 'Prof. Miller', teacherId: 'TCH_002', courseName: 'Mathematics', semesterName: 'Semester 1', subjectName: 'Calculus' }
+        ];
+
+        let semestersByCourse = {
+            'Computer Science': ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6', 'Semester 7', 'Semester 8'],
+            'Mathematics': ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6', 'Semester 7', 'Semester 8'],
+            'Physics': ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6', 'Semester 7', 'Semester 8']
+        };
+
+        // --- Helper Functions ---
+        function showMessage(message, duration = 3000) {
+            clearTimeout(window.messageTimeout);
+            messageText.textContent = message;
+            messageBox.classList.remove('opacity-0', '-translate-y-10');
+            messageBox.classList.add('opacity-100', 'translate-y-0');
+            window.messageTimeout = setTimeout(() => {
+                messageBox.classList.remove('opacity-100', 'translate-y-0');
+                messageBox.classList.add('opacity-0', '-translate-y-10');
+            }, duration);
+        }
+
+        function showConfirmation(message, onConfirm) {
+            confirmMessage.textContent = message;
+            confirmationModal.classList.remove('hidden');
+            
+            const handleProceed = () => {
+                onConfirm();
+                confirmationModal.classList.add('hidden');
+                confirmProceedBtn.removeEventListener('click', handleProceed);
+            };
+
+            const handleCancel = () => {
+                confirmationModal.classList.add('hidden');
+                confirmCancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            confirmProceedBtn.addEventListener('click', handleProceed);
+            confirmCancelBtn.addEventListener('click', handleCancel);
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // --- Data Management Functions ---
+        function addAssignment(teacherId, teacherName, courseName, semesterName, subjectName) {
+            const newAssignment = {
+                id: crypto.randomUUID(),
+                teacherId,
+                teacherName,
+                courseName,
+                semesterName,
+                subjectName
+            };
+            assignments.push(newAssignment);
+            renderAssignments();
+            showMessage('Assignment added successfully!');
+        }
+
+        function updateAssignment(assignmentId, data) {
+            const index = assignments.findIndex(a => a.id === assignmentId);
+            if (index !== -1) {
+                assignments[index] = { ...assignments[index], ...data };
+                renderAssignments();
+                showMessage('Assignment updated successfully!');
+            }
+        }
+
+        function deleteAssignment(assignmentId) {
+            showConfirmation("Are you sure you want to delete this assignment?", () => {
+                const index = assignments.findIndex(a => a.id === assignmentId);
+                if (index !== -1) {
+                    assignments.splice(index, 1);
+                    renderAssignments();
+                    showMessage('Assignment deleted successfully!');
+                }
+            });
+        }
+        
+        function deleteAssignmentGroup(course, semester) {
+            showConfirmation(`Are you sure you want to delete all assignments for ${course}, ${semester}?`, () => {
+                assignments = assignments.filter(a => !(a.courseName === course && a.semesterName === semester));
+                renderAssignments();
+                showMessage(`Assignments for ${course}, ${semester} deleted successfully!`);
+            });
+        }
+        
+        // --- Data Rendering Functions ---
+        function renderAssignments() {
+            assignmentsTableBody.innerHTML = '';
+            
+            // Group assignments by course and semester
+            const groupedAssignments = assignments.reduce((acc, assignment) => {
+                const key = `${assignment.courseName}-${assignment.semesterName}`;
+                if (!acc[key]) {
+                    acc[key] = {
+                        course: assignment.courseName,
+                        semester: assignment.semesterName,
+                        assignments: []
+                    };
+                }
+                acc[key].assignments.push(assignment);
+                return acc;
+            }, {});
+
+            Object.values(groupedAssignments).forEach(group => {
+                const row = document.createElement('tr');
+                const teacherSubjectListHtml = group.assignments.map(ass => `
+                    <div class="py-1">
+                        <p class="text-white font-semibold">${ass.teacherName} (${ass.teacherId})</p>
+                        <p class="text-gray-400">Subject: ${ass.subjectName}</p>
+                    </div>
+                `).join('');
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 text-sm text-gray-400">
+                        <p class="text-white font-semibold">${group.course}</p>
+                        <p>${group.semester}</p>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-400">
+                        ${teacherSubjectListHtml}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium space-x-2">
+                        <button onclick="editAssignmentGroup('${group.course}', '${group.semester}')" class="text-indigo-500 hover:text-indigo-700">Edit</button>
+                        <button onclick="deleteAssignmentGroup('${group.course}', '${group.semester}')" class="text-red-500 hover:text-red-700">Delete All</button>
+                    </td>
+                `;
+                assignmentsTableBody.appendChild(row);
+            });
+        }
+        
+        function renderTeacherDropdowns(selectElement, selectedTeacherId) {
+            selectElement.innerHTML = '<option value="">-- Select Teacher --</option>';
+            teachers.forEach(teacher => {
+                const option = document.createElement('option');
+                option.value = teacher.id;
+                option.textContent = `${teacher.name} (${teacher.teacherId})`;
+                if (teacher.id === selectedTeacherId) {
+                    option.selected = true;
+                }
+                selectElement.appendChild(option);
+            });
+        }
+        
+        function renderCourseDropdowns(selectElement, selectedCourseName) {
+            selectElement.innerHTML = '<option value="">-- Select Course --</option>';
+            courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course.name;
+                option.textContent = course.name;
+                if (course.name === selectedCourseName) {
+                    option.selected = true;
+                }
+                selectElement.appendChild(option);
+            });
+        }
+
+        function renderSemesterDropdowns(semesterSelect, selectedCourse, selectedSemester) {
+            semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+            const availableSemesters = semestersByCourse[selectedCourse] || [];
+            availableSemesters.forEach(semester => {
+                const option = document.createElement('option');
+                option.value = semester;
+                option.textContent = semester;
+                if (semester === selectedSemester) {
+                    option.selected = true;
+                }
+                semesterSelect.appendChild(option);
+            });
+        }
+        
+        function renderSubjectDropdowns(subjectSelect, selectedCourse, selectedSemester, selectedSubjectName) {
+            subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            const filteredSubjects = subjects.filter(subject => subject.course === selectedCourse && subject.semester === selectedSemester);
+            filteredSubjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject.name;
+                option.textContent = subject.name;
+                if (subject.name === selectedSubjectName) {
+                    option.selected = true;
+                }
+                subjectSelect.appendChild(option);
+            });
+        }
+        
+        function renderAssignSubjectTeacherRows(courseName, semesterName) {
+            assignSubjectsTableBody.innerHTML = '';
+            const filteredSubjects = subjects.filter(subject => subject.course === courseName && subject.semester === semesterName);
+
+            if (filteredSubjects.length > 0) {
+                subjectsForAssignmentDiv.classList.remove('hidden');
+                submitAssignmentsBtn.disabled = false;
+                filteredSubjects.forEach(subject => {
+                    const row = document.createElement('tr');
+                    const teacherDropdownId = `assign-teacher-${subject.id}`;
+                    row.innerHTML = `
+                        <td class="px-4 py-2 text-sm text-white">${subject.name} (${subject.subjectId})</td>
+                        <td class="px-4 py-2 text-sm text-white">
+                            <select id="${teacherDropdownId}" name="teacher_select" class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                                <option value="">-- Select Teacher --</option>
+                            </select>
+                        </td>
+                    `;
+                    assignSubjectsTableBody.appendChild(row);
+                    
+                    const teacherSelectElement = document.getElementById(teacherDropdownId);
+                    renderTeacherDropdowns(teacherSelectElement);
+                });
+            } else {
+                subjectsForAssignmentDiv.classList.add('hidden');
+                submitAssignmentsBtn.disabled = true;
+                showMessage('No subjects found for the selected course and semester.');
+            }
+        }
+        
+        function editAssignmentGroup(course, semester) {
+            openModal('edit-assignment-modal');
+            const form = document.getElementById('edit-assignment-form');
+            
+            const assignmentsInGroup = assignments.filter(a => a.courseName === course && a.semesterName === semester);
+            
+            const assignmentsTableBody = form.querySelector('#edit-assign-subjects-table-body');
+            assignmentsTableBody.innerHTML = '';
+            
+            assignmentsInGroup.forEach(assignment => {
+                const row = document.createElement('tr');
+                const teacherSelectId = `edit-teacher-${assignment.id}`;
+                row.innerHTML = `
+                    <td class="px-4 py-2 text-sm text-white">${assignment.subjectName}</td>
+                    <td class="px-4 py-2 text-sm text-white">
+                        <select id="${teacherSelectId}" name="teacher_select" class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none"></select>
+                    </td>
+                `;
+                assignmentsTableBody.appendChild(row);
+                renderTeacherDropdowns(document.getElementById(teacherSelectId), assignment.teacherId);
+            });
+            
+            form.dataset.course = course;
+            form.dataset.semester = semester;
+        }
+
+        // --- Event Handlers ---
+        addAssignmentBtn.addEventListener('click', () => {
+            addAssignmentFormContainer.classList.remove('hidden');
+            assignmentForm.reset();
+            assignSubjectsTableBody.innerHTML = '';
+            subjectsForAssignmentDiv.classList.add('hidden');
+            renderCourseDropdowns(assignCourseSelect);
+            assignSemesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+        });
+
+        cancelAddAssignmentBtn.addEventListener('click', () => {
+            addAssignmentFormContainer.classList.add('hidden');
+            assignmentForm.reset();
+        });
+        
+        assignCourseSelect.addEventListener('change', (e) => {
+            renderSemesterDropdowns(assignSemesterSelect, e.target.value);
+            renderAssignSubjectTeacherRows(e.target.value, assignSemesterSelect.value);
+        });
+        
+        assignSemesterSelect.addEventListener('change', (e) => {
+            const selectedCourse = assignCourseSelect.value;
+            renderAssignSubjectTeacherRows(selectedCourse, e.target.value);
+        });
+        
+        sidebarToggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+            sidebarOverlay.classList.toggle('hidden');
+        });
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            sidebarOverlay.classList.add('hidden');
+        });
+
+        assignmentForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const courseName = assignCourseSelect.value;
+            const semesterName = assignSemesterSelect.value;
+            
+            const subjectRows = assignSubjectsTableBody.querySelectorAll('tr');
+            subjectRows.forEach(row => {
+                const subjectText = row.querySelector('td:first-child').textContent;
+                const subjectName = subjectText.split('(')[0].trim();
+                const teacherSelect = row.querySelector('select');
+                const teacherId = teacherSelect.value;
+                
+                if (teacherId) {
+                    const teacher = teachers.find(t => t.id === teacherId);
+                    addAssignment(
+                        teacher.id,
+                        teacher.name,
+                        courseName,
+                        semesterName,
+                        subjectName
+                    );
+                }
+            });
+            
+            assignmentForm.reset();
+            addAssignmentFormContainer.classList.add('hidden');
+        });
+        
+        editAssignmentForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const courseName = e.target.dataset.course;
+            const semesterName = e.target.dataset.semester;
+            
+            const subjectRows = editAssignmentForm.querySelectorAll('tbody tr');
+            
+            const assignmentsToUpdate = assignments.filter(a => a.courseName === courseName && a.semesterName === semesterName);
+            
+            subjectRows.forEach(row => {
+                const subjectName = row.querySelector('td:first-child').textContent.trim();
+                const teacherSelect = row.querySelector('select');
+                const teacherId = teacherSelect.value;
+                
+                if (teacherId) {
+                     const teacher = teachers.find(t => t.id === teacherId);
+                     const existingAssignment = assignmentsToUpdate.find(a => a.subjectName === subjectName);
+                     if (existingAssignment) {
+                        updateAssignment(existingAssignment.id, { teacherId, teacherName: teacher.name });
+                     } else {
+                        addAssignment(teacher.id, teacher.name, courseName, semesterName, subjectName);
+                     }
+                } else {
+                    const existingAssignment = assignmentsToUpdate.find(a => a.subjectName === subjectName);
+                    if (existingAssignment) {
+                        deleteAssignment(existingAssignment.id);
+                    }
+                }
+            });
+
+            closeModal('edit-assignment-modal');
+        });
+
+        cancelEditAssignmentBtn.addEventListener('click', () => closeModal('edit-assignment-modal'));
+
+        // --- 3D Scene and Animations (from provided theme) ---
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+            renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#webgl-canvas'), antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            const particlesGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(PARTICLE_COUNT * 3);
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const x = (Math.random() - 0.5) * 20;
+                const y = (Math.random() - 0.5) * 20;
+                const z = (Math.random() - 0.5) * 20;
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+                particlesArray.push({ x, y, z, originalX: x, originalY: y, originalZ: z, velocityX: 0, velocityY: 0, velocityZ: 0 });
+            }
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const particlesMaterial = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.03, blending: THREE.AdditiveBlending, transparent: true, sizeAttenuation: true });
+            particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            scene.add(particles);
+
+            const lineGeometry = new THREE.BufferGeometry();
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending });
+            lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+            scene.add(lines);
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+            modeToggle.addEventListener('click', toggleMode);
+            
+            animate();
+        }
+
+        function toggleMode() {
+            isDayMode = !isDayMode;
+            document.body.classList.toggle('day-mode');
+            document.getElementById('sun-icon').classList.toggle('hidden');
+            document.getElementById('moon-icon').classList.toggle('hidden');
+            
+            const particleColor = isDayMode ? new THREE.Color(0xffa500) : new THREE.Color(0x00ffff);
+            const lineColor = isDayMode ? new THREE.Color(0xffd700) : new THREE.Color(0x00ffff);
+            particles.material.color.set(particleColor);
+            lines.material.color.set(lineColor);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const positions = particles.geometry.attributes.position.array;
+            const linePositions = [];
+            const mouse3D = new THREE.Vector3(mouse.x * 10, mouse.y * 10, 0);
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const p = particlesArray[i];
+                const dx = mouse3D.x - p.x;
+                const dy = mouse3D.y - p.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 2) {
+                    const force = (2 - dist) * 0.03;
+                    p.velocityX += (p.x - mouse3D.x) * force;
+                    p.velocityY += (p.y - mouse3D.y) * force;
+                }
+                p.velocityX += (p.originalX - p.x) * 0.001;
+                p.velocityY += (p.originalY - p.y) * 0.001;
+                p.velocityZ += (p.originalZ - p.z) * 0.001;
+                p.x += p.velocityX; p.y += p.velocityY; p.z += p.velocityZ;
+                p.velocityX *= 0.95; p.velocityY *= 0.95; p.velocityZ *= 0.95;
+                positions[i * 3] = p.x; positions[i * 3 + 1] = p.y; positions[i * 3 + 2] = p.z;
+
+                for (let j = i + 1; j < PARTICLE_COUNT; j++) {
+                    const p2 = particlesArray[j];
+                    const d = Math.sqrt(Math.pow(p.x - p2.x, 2) + Math.pow(p.y - p2.y, 2) + Math.pow(p.z - p2.z, 2));
+                    if (d < LINE_DISTANCE_THRESHOLD) {
+                        linePositions.push(p.x, p.y, p.z, p2.x, p2.y, p2.z);
+                    }
+                }
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+            lines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+            
+            camera.position.x += (mouse.x * 0.5 - camera.position.x) * 0.05;
+            camera.position.y += (mouse.y * 0.5 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+            renderer.render(scene, camera);
+        }
+
+        // --- App Initialization ---
+        window.onload = () => {
+            init3D();
+            renderAssignments();
+        };
+    </script>
+</body>
+</html>

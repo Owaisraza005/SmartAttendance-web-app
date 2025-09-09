@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartAttend - Student Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-color: #0a0a18;
+            transition: background-color 1.5s ease, background-image 1.5s ease;
+        }
+        body.day-mode {
+            background-image: linear-gradient(135deg, #fddb92 0%, #d1fdff 100%);
+        }
+        #webgl-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0;
+        }
+        #ui-container {
+            position: relative; z-index: 1;
+            display: flex;
+            min-height: 100vh;
+        }
+        .card-glass {
+            background: rgba(10, 10, 24, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: background 1.5s ease, border 1.5s ease;
+        }
+        body.day-mode .card-glass {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+        .card-hover-effect {
+            transition: transform 0.4s ease-out, box-shadow 0.4s ease-out;
+            transform-style: preserve-3d;
+        }
+        .card-hover-effect:hover {
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), 0 0 40px rgba(0, 150, 255, 0.2);
+            border-color: rgba(0, 255, 255, 0.3);
+            transform: translateY(-8px) scale(1.02);
+        }
+        body.day-mode .card-hover-effect:hover {
+            box-shadow: 0 0 20px rgba(251, 146, 60, 0.3), 0 0 40px rgba(251, 146, 60, 0.1);
+            border-color: rgba(251, 146, 60, 0.7);
+        }
+        .text-theme { color: #e5e7eb; transition: color 1.5s ease; }
+        body.day-mode .text-theme { color: #4a2c0f; }
+        .subtext-theme { color: #9ca3af; transition: color 1.5s ease; }
+        body.day-mode .subtext-theme { color: #78350f; }
+        .icon-theme { color: #22d3ee; transition: color 1.5s ease; }
+        body.day-mode .icon-theme { color: #f97316; }
+        .message-box {
+            transition: opacity 0.3s ease-in-out, transform 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        .sidebar-link.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-left-color: #06b6d4;
+        }
+        body.day-mode .sidebar-link.active {
+             background-color: rgba(251, 146, 60, 0.1);
+             border-left-color: #f97316;
+        }
+        .hidden { display: none; }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .sidebar-toggle {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 60;
+            padding: 0.5rem;
+            background-color: rgba(10, 10, 24, 0.5);
+            backdrop-filter: blur(8px);
+            border-radius: 9999px;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .sidebar-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 40;
+        }
+        @media (min-width: 768px) {
+            .sidebar-toggle {
+                display: none;
+            }
+            #sidebar {
+                transform: translateX(0) !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="webgl-canvas"></canvas>
+    
+    <div id="ui-container">
+        <!-- Sidebar Navigation -->
+        <button id="sidebar-toggle-btn" class="sidebar-toggle md:hidden">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div id="sidebar-overlay" class="hidden md:hidden"></div>
+
+        <aside id="sidebar" class="w-64 h-screen fixed top-0 left-0 bg-gray-900/50 backdrop-blur-md p-6 border-r border-gray-700/50 z-50 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-300">
+            <h1 class="text-2xl font-bold text-white mb-8">Admin Panel</h1>
+            <nav>
+                <ul class="space-y-2">
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-home text-cyan-400"></i>Dashboard</a></li>
+                    <li><a href="#" class="sidebar-link active block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-user-graduate text-cyan-400"></i>Students</a></li>
+                    <li><a href="Teachers.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-chalkboard-teacher text-cyan-400"></i>Teachers</a></li>
+                    <li><a href="Courses.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-book text-cyan-400"></i>Courses</a></li>
+                    <li><a href="Subjects.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-clipboard-list text-cyan-400"></i>Subjects</a></li>
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-link text-cyan-400"></i>Assignments</a></li>
+                    <li><a href="index.html" class="sidebar-link block p-3 rounded-lg text-white/80 hover:bg-white/10 transition-colors border-l-4 border-transparent flex items-center gap-3"><i class="fas fa-calendar-check text-cyan-400"></i>Attendance</a></li>
+                </ul>
+            </nav>
+            <div class="mt-auto pt-6 flex flex-col items-start">
+                <button id="mode-toggle" class="p-2 rounded-full bg-white/20 backdrop-blur-sm focus:outline-none text-white transition-colors">
+                    <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 p-4 sm:p-6 md:p-8 ml-0 md:ml-64 overflow-y-auto">
+            <header class="mb-6 md:mb-8 pl-16 md:pl-0">
+                <h1 class="text-3xl sm:text-4xl font-bold text-theme">Student Management</h1>
+                <p class="subtext-theme text-sm sm:text-base">Register and manage students for your school.</p>
+            </header>
+
+            <!-- Student Management Section -->
+            <section id="student-management" class="page-content">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                    <h2 class="text-xl sm:text-2xl font-semibold text-theme">Available Students</h2>
+                    <button id="add-student-btn" class="mt-4 sm:mt-0 px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Register New Student</button>
+                </div>
+                
+                <div id="add-student-form-container" class="grid grid-cols-1 mb-8 hidden">
+                    <div class="card-glass p-6 rounded-xl">
+                        <h3 class="text-xl font-semibold text-theme mb-4">Student Registration</h3>
+                        <form id="student-form" class="space-y-4">
+                            <div>
+                                <label for="student-course" class="block subtext-theme">Course</label>
+                                <select id="student-course" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                                    <option value="">-- Select Course --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="student-semester" class="block subtext-theme">Semester</label>
+                                <select id="student-semester" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                                    <option value="">-- Select Semester --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="student-name" class="block subtext-theme">Student Name</label>
+                                <input type="text" id="student-name" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label for="student-id" class="block subtext-theme">Student ID</label>
+                                <input type="text" id="student-id" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label for="student-phone" class="block subtext-theme">Phone No.</label>
+                                <input type="tel" id="student-phone" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label for="student-email" class="block subtext-theme">Email ID</label>
+                                <input type="email" id="student-email" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block subtext-theme">Student Photos (5 required)</label>
+                                <div class="relative w-full aspect-video rounded-lg overflow-hidden mt-1 mb-2">
+                                    <video id="webcam-stream" class="absolute inset-0 w-full h-full object-cover" autoplay playsinline></video>
+                                    <canvas id="photo-canvas" class="absolute inset-0 w-full h-full object-cover hidden"></canvas>
+                                </div>
+                                <div class="flex justify-between items-center space-x-2 mb-2">
+                                    <button type="button" id="start-camera-btn" class="flex-1 p-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Start Camera</button>
+                                    <button type="button" id="take-photo-btn" class="flex-1 p-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition" disabled>Take Photo</button>
+                                    <button type="button" id="flip-camera-btn" class="p-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition" disabled><i class="fas fa-sync-alt"></i></button>
+                                </div>
+                                <div id="photo-thumbnails" class="flex space-x-2 overflow-x-auto p-2 bg-gray-800/50 rounded-lg">
+                                    <!-- Photo thumbnails will be added here -->
+                                </div>
+                                <textarea id="student-photos-data" class="hidden"></textarea>
+                            </div>
+                            <div class="flex justify-end space-x-4">
+                                <button type="button" id="cancel-add-student" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                                <button type="submit" class="px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Register Student</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Student Table -->
+                <div class="card-glass p-6 rounded-xl overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-700">
+                        <thead class="bg-gray-800/50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Course & Semester</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">No. of Students</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="student-table-body" class="bg-gray-900/50 divide-y divide-gray-700">
+                            <!-- Student rows will be dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <!-- Modals -->
+    <div id="student-view-modal" class="modal hidden">
+        <div class="card-glass p-8 rounded-2xl w-full max-w-2xl mx-4">
+            <h3 class="text-2xl font-semibold text-theme mb-4">Students in Course & Semester</h3>
+            <p class="subtext-theme mb-4" id="view-student-group-info"></p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-700">
+                    <thead class="bg-gray-800/50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Student ID</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Phone No.</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email ID</th>
+                        </tr>
+                    </thead>
+                    <tbody id="view-student-table-body" class="bg-gray-900/50 divide-y divide-gray-700">
+                        <!-- Student data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex justify-end space-x-4 mt-6">
+                <button type="button" id="close-view-modal" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="student-edit-modal" class="modal hidden">
+        <div class="card-glass p-8 rounded-2xl w-full max-w-md mx-4">
+            <h3 class="text-2xl font-semibold text-theme mb-4">Edit Student</h3>
+            <form id="edit-student-form" class="space-y-4">
+                <input type="hidden" id="edit-student-doc-id">
+                <div>
+                    <label for="edit-student-name" class="block subtext-theme">Student Name</label>
+                    <input type="text" id="edit-student-name" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div>
+                    <label for="edit-student-id" class="block subtext-theme">Student ID</label>
+                    <input type="text" id="edit-student-id" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div>
+                    <label for="edit-student-phone" class="block subtext-theme">Phone No.</label>
+                    <input type="tel" id="edit-student-phone" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div>
+                    <label for="edit-student-email" class="block subtext-theme">Email ID</label>
+                    <input type="email" id="edit-student-email" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none">
+                </div>
+                <div>
+                    <label for="edit-student-photos" class="block subtext-theme">Student Photos (5 required)</label>
+                    <textarea id="edit-student-photos" required class="w-full mt-1 p-2 bg-gray-800/50 text-white rounded-md border border-gray-700/50 focus:border-cyan-400 focus:outline-none" rows="3"></textarea>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancel-student-edit" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white font-semibold rounded-lg hover:bg-cyan-700 transition">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="confirmation-modal" class="modal hidden">
+        <div class="card-glass p-8 rounded-2xl w-full max-w-sm text-center mx-4">
+            <h3 id="confirmation-title" class="text-xl font-semibold text-theme mb-4">Are you sure?</h3>
+            <p id="confirmation-message" class="subtext-theme mb-6">Do you want to delete this record?</p>
+            <div class="flex justify-center space-x-4">
+                <button id="confirm-cancel" class="px-4 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition">Cancel</button>
+                <button id="confirm-proceed" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast message for notifications -->
+    <div id="message-box" class="message-box fixed top-5 right-1/2 translate-x-1/2 bg-gray-900/80 backdrop-blur-sm text-white py-3 px-5 rounded-lg shadow-xl opacity-0 transform -translate-y-10 pointer-events-none z-30">
+        <p id="message-text"></p>
+    </div>
+
+    <script>
+        // --- Global State & DOM Elements ---
+        let scene, camera, renderer, particles, lines;
+        const mouse = new THREE.Vector2();
+        let particlesArray = [];
+        const PARTICLE_COUNT = 2000;
+        const LINE_DISTANCE_THRESHOLD = 0.8;
+        let isDayMode = false;
+        
+        const messageBox = document.getElementById('message-box');
+        const messageText = document.getElementById('message-text');
+        
+        const modeToggle = document.getElementById('mode-toggle');
+        const sidebarLinks = document.querySelectorAll('.sidebar-link');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+        const addStudentBtn = document.getElementById('add-student-btn');
+        const addStudentFormContainer = document.getElementById('add-student-form-container');
+        const cancelAddStudentBtn = document.getElementById('cancel-add-student');
+        const studentForm = document.getElementById('student-form');
+        const studentCourseSelect = document.getElementById('student-course');
+        const studentSemesterSelect = document.getElementById('student-semester');
+        
+        const webcamStream = document.getElementById('webcam-stream');
+        const photoCanvas = document.getElementById('photo-canvas');
+        const startCameraBtn = document.getElementById('start-camera-btn');
+        const takePhotoBtn = document.getElementById('take-photo-btn');
+        const flipCameraBtn = document.getElementById('flip-camera-btn');
+        const photoThumbnailsContainer = document.getElementById('photo-thumbnails');
+        const studentPhotosData = document.getElementById('student-photos-data');
+
+        const studentTableBody = document.getElementById('student-table-body');
+        const studentViewModal = document.getElementById('student-view-modal');
+        const viewStudentGroupInfo = document.getElementById('view-student-group-info');
+        const viewStudentTableBody = document.getElementById('view-student-table-body');
+        const closeViewModalBtn = document.getElementById('close-view-modal');
+
+        const studentEditModal = document.getElementById('student-edit-modal');
+        const editStudentForm = document.getElementById('edit-student-form');
+        const cancelStudentEditBtn = document.getElementById('cancel-student-edit');
+        const confirmationModal = document.getElementById('confirmation-modal');
+        const confirmMessage = document.getElementById('confirmation-message');
+        const confirmCancelBtn = document.getElementById('confirm-cancel');
+        const confirmProceedBtn = document.getElementById('confirm-proceed');
+
+        // In-memory data storage for demonstration
+        let courses = [
+            { id: '1', name: 'Computer Science', courseId: 'CS101' },
+            { id: '2', name: 'Mathematics', courseId: 'MTH202' },
+            { id: '3', name: 'Physics', courseId: 'PHY303' }
+        ];
+
+        let semestersByCourse = {
+            'Computer Science': ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6', 'Semester 7', 'Semester 8'],
+            'Mathematics': ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6', 'Semester 7', 'Semester 8'],
+            'Physics': ['Semester 1', 'Semester 2', 'Semester 3', 'Semester 4', 'Semester 5', 'Semester 6', 'Semester 7', 'Semester 8']
+        };
+
+        let students = [
+            { id: 'stu1', name: 'Alice Smith', studentId: 'STU1001', phone: '1234567890', email: 'alice@example.com', course: 'Computer Science', semester: 'Semester 3', photoData: 'photo_alice_1' },
+            { id: 'stu2', name: 'Bob Johnson', studentId: 'STU1002', phone: '0987654321', email: 'bob@example.com', course: 'Computer Science', semester: 'Semester 3', photoData: 'photo_bob_2' },
+            { id: 'stu3', name: 'Charlie Brown', studentId: 'STU1003', phone: '5551234567', email: 'charlie@example.com', course: 'Mathematics', semester: 'Semester 1', photoData: 'photo_charlie_3' }
+        ];
+
+        let cameraStream = null;
+        let photosCaptured = [];
+        let currentFacingMode = 'user';
+
+        // --- Helper Functions ---
+        function showMessage(message, duration = 3000) {
+            clearTimeout(window.messageTimeout);
+            messageText.textContent = message;
+            messageBox.classList.remove('opacity-0', '-translate-y-10');
+            messageBox.classList.add('opacity-100', 'translate-y-0');
+            window.messageTimeout = setTimeout(() => {
+                messageBox.classList.remove('opacity-100', 'translate-y-0');
+                messageBox.classList.add('opacity-0', '-translate-y-10');
+            }, duration);
+        }
+
+        function showConfirmation(message, onConfirm) {
+            confirmMessage.textContent = message;
+            confirmationModal.classList.remove('hidden');
+            
+            const handleProceed = () => {
+                onConfirm();
+                confirmationModal.classList.add('hidden');
+                confirmProceedBtn.removeEventListener('click', handleProceed);
+            };
+
+            const handleCancel = () => {
+                confirmationModal.classList.add('hidden');
+                confirmCancelBtn.removeEventListener('click', handleCancel);
+            };
+
+            confirmProceedBtn.addEventListener('click', handleProceed);
+            confirmCancelBtn.addEventListener('click', handleCancel);
+        }
+
+        function openModal(modalId, docId, data) {
+            const modal = document.getElementById(modalId);
+            const form = modal.querySelector('form');
+            form.reset();
+            const docIdInput = form.querySelector(`#edit-student-doc-id`);
+            docIdInput.value = docId;
+            
+            form.querySelector('#edit-student-name').value = data.name;
+            form.querySelector('#edit-student-id').value = data.studentId;
+            form.querySelector('#edit-student-phone').value = data.phone;
+            form.querySelector('#edit-student-email').value = data.email;
+            form.querySelector('#edit-student-photos').value = data.photoData;
+            
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        // --- Camera Functions ---
+        async function startCamera() {
+            try {
+                if (cameraStream) {
+                    cameraStream.getTracks().forEach(track => track.stop());
+                }
+                const constraints = {
+                    video: {
+                        facingMode: currentFacingMode
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                webcamStream.srcObject = stream;
+                cameraStream = stream;
+                webcamStream.classList.remove('hidden');
+                photoCanvas.classList.add('hidden');
+                takePhotoBtn.disabled = false;
+                
+                // Check if multiple cameras are available to enable the flip button
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                flipCameraBtn.disabled = videoDevices.length <= 1;
+                
+                startCameraBtn.textContent = 'Stop Camera';
+                webcamStream.play(); // Explicitly start video playback
+            } catch (err) {
+                console.error("Could not start camera:", err);
+                showMessage("Could not start camera. Please check permissions.");
+            }
+        }
+        
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                webcamStream.srcObject = null;
+                cameraStream = null;
+                takePhotoBtn.disabled = true;
+                flipCameraBtn.disabled = true;
+                startCameraBtn.textContent = 'Start Camera';
+            }
+        }
+
+        function flipCamera() {
+            stopCamera();
+            currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+            startCamera();
+        }
+
+        function takePhoto() {
+            if (photosCaptured.length >= 5) {
+                showMessage('Maximum of 5 photos already captured.');
+                return;
+            }
+            
+            const context = photoCanvas.getContext('2d');
+            photoCanvas.width = webcamStream.videoWidth;
+            photoCanvas.height = webcamStream.videoHeight;
+            context.drawImage(webcamStream, 0, 0, photoCanvas.width, photoCanvas.height);
+            const photoDataUrl = photoCanvas.toDataURL('image/png');
+            
+            photosCaptured.push(photoDataUrl);
+            studentPhotosData.value = JSON.stringify(photosCaptured);
+            
+            const thumbnail = document.createElement('img');
+            thumbnail.src = photoDataUrl;
+            thumbnail.classList.add('w-16', 'h-16', 'object-cover', 'rounded');
+            photoThumbnailsContainer.appendChild(thumbnail);
+            
+            showMessage(`Photo ${photosCaptured.length} captured!`);
+        }
+
+        // --- Data Management Functions ---
+        function addStudent(student) {
+            student.id = crypto.randomUUID(); 
+            students.push(student);
+            renderStudents();
+            showMessage('Student registered successfully!');
+        }
+
+        function updateStudent(studentId, data) {
+            const index = students.findIndex(s => s.id === studentId);
+            if (index !== -1) {
+                students[index] = { ...students[index], ...data };
+                renderStudents();
+                showMessage('Student updated successfully!');
+            }
+        }
+
+        function deleteStudent(studentId) {
+            showConfirmation("Are you sure you want to delete this student?", () => {
+                const index = students.findIndex(s => s.id === studentId);
+                if (index !== -1) {
+                    students.splice(index, 1);
+                    renderStudents();
+                    showMessage('Student deleted successfully!');
+                }
+            });
+        }
+        
+        function deleteStudentGroup(course, semester) {
+            showConfirmation(`Are you sure you want to delete all students in ${course}, ${semester}?`, () => {
+                students = students.filter(s => !(s.course === course && s.semester === semester));
+                renderStudents();
+                showMessage(`Students for ${course}, ${semester} deleted successfully!`);
+            });
+        }
+
+        // --- Data Rendering Functions ---
+        function renderStudents() {
+            studentTableBody.innerHTML = '';
+            
+            // Group students by course and semester
+            const groupedStudents = students.reduce((acc, student) => {
+                const key = `${student.course}-${student.semester}`;
+                if (!acc[key]) {
+                    acc[key] = {
+                        course: student.course,
+                        semester: student.semester,
+                        count: 0
+                    };
+                }
+                acc[key].count++;
+                return acc;
+            }, {});
+
+            // Render each grouped row
+            Object.values(groupedStudents).forEach(group => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                        <p class="text-white font-semibold">${group.course}</p>
+                        <p>${group.semester}</p>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-white">${group.count}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-right font-medium space-x-2">
+                        <button onclick="viewStudentGroup('${group.course}', '${group.semester}')" class="text-indigo-500 hover:text-indigo-700">View More</button>
+                        <button onclick="editStudentGroup('${group.course}', '${group.semester}')" class="text-indigo-500 hover:text-indigo-700">Edit</button>
+                        <button onclick="deleteStudentGroup('${group.course}', '${group.semester}')" class="text-red-500 hover:text-red-700">Delete</button>
+                    </td>
+                `;
+                studentTableBody.appendChild(row);
+            });
+        }
+        
+        function viewStudentGroup(course, semester) {
+            studentViewModal.classList.remove('hidden');
+            viewStudentGroupInfo.textContent = `Students in ${course}, ${semester}`;
+            
+            const filteredStudents = students.filter(s => s.course === course && s.semester === semester);
+            viewStudentTableBody.innerHTML = '';
+            
+            filteredStudents.forEach(student => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-white">${student.name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${student.studentId}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${student.phone}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">${student.email}</td>
+                `;
+                viewStudentTableBody.appendChild(row);
+            });
+        }
+
+        function editStudentGroup(course, semester) {
+            const group = students.filter(s => s.course === course && s.semester === semester);
+            // Assuming you want to edit the first student in the group for simplicity, but a dropdown would be better
+            if (group.length > 0) {
+                const student = group[0];
+                openModal('student-edit-modal', student.id, {
+                    name: student.name,
+                    studentId: student.studentId,
+                    phone: student.phone,
+                    email: student.email,
+                    photoData: student.photoData
+                });
+            } else {
+                showMessage('No students found in this group to edit.');
+            }
+        }
+        
+        function renderCourseDropdowns(courseSelect) {
+            courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course.name;
+                option.textContent = course.name;
+                courseSelect.appendChild(option);
+            });
+        }
+
+        function renderSemesterDropdowns(semesterSelect, selectedCourse) {
+            semesterSelect.innerHTML = '<option value="">-- Select Semester --</option>';
+            const semesters = semestersByCourse[selectedCourse] || [];
+            semesters.forEach(semester => {
+                const option = document.createElement('option');
+                option.value = semester;
+                option.textContent = semester;
+                semesterSelect.appendChild(option);
+            });
+        }
+        
+        // --- Event Handlers ---
+        addStudentBtn.addEventListener('click', () => {
+            addStudentFormContainer.classList.remove('hidden');
+            studentForm.reset();
+            renderCourseDropdowns(studentCourseSelect);
+            renderSemesterDropdowns(studentSemesterSelect, studentCourseSelect.value);
+            photosCaptured = [];
+            photoThumbnailsContainer.innerHTML = '';
+            stopCamera();
+        });
+
+        cancelAddStudentBtn.addEventListener('click', () => {
+            addStudentFormContainer.classList.add('hidden');
+            studentForm.reset();
+            stopCamera();
+        });
+
+        studentCourseSelect.addEventListener('change', (e) => {
+            renderSemesterDropdowns(studentSemesterSelect, e.target.value);
+        });
+
+        sidebarToggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-full');
+            sidebarOverlay.classList.toggle('hidden');
+        });
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.add('-translate-x-full');
+            sidebarOverlay.classList.add('hidden');
+        });
+
+        startCameraBtn.addEventListener('click', () => {
+            if (cameraStream) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        });
+
+        takePhotoBtn.addEventListener('click', takePhoto);
+        flipCameraBtn.addEventListener('click', flipCamera);
+
+        studentForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (photosCaptured.length < 5) {
+                showMessage('Please capture at least 5 photos before registering.');
+                return;
+            }
+
+            const studentName = studentForm.querySelector('#student-name').value;
+            const newStudent = {
+                id: crypto.randomUUID(),
+                name: studentName,
+                studentId: studentForm.querySelector('#student-id').value,
+                phone: studentForm.querySelector('#student-phone').value,
+                email: studentForm.querySelector('#student-email').value,
+                course: studentForm.querySelector('#student-course').value,
+                semester: studentForm.querySelector('#student-semester').value,
+                photoData: JSON.stringify(photosCaptured) // Save all 5 photos as a JSON string
+            };
+            
+            addStudent(newStudent);
+            studentForm.reset();
+            addStudentFormContainer.classList.add('hidden');
+            stopCamera();
+        });
+
+        editStudentForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const docId = editStudentForm.querySelector('#edit-student-doc-id').value;
+            const updatedData = {
+                name: editStudentForm.querySelector('#edit-student-name').value,
+                studentId: editStudentForm.querySelector('#edit-student-id').value,
+                phone: editStudentForm.querySelector('#edit-student-phone').value,
+                email: editStudentForm.querySelector('#edit-student-email').value,
+                photoData: editStudentForm.querySelector('#edit-student-photos').value
+            };
+            updateStudent(docId, updatedData);
+            closeModal('student-edit-modal');
+        });
+
+        cancelStudentEditBtn.addEventListener('click', () => closeModal('student-edit-modal'));
+        closeViewModalBtn.addEventListener('click', () => closeModal('student-view-modal'));
+        
+        // --- 3D Scene and Animations (from provided theme) ---
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 5;
+            renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#webgl-canvas'), antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            const particlesGeometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(PARTICLE_COUNT * 3);
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const x = (Math.random() - 0.5) * 20;
+                const y = (Math.random() - 0.5) * 20;
+                const z = (Math.random() - 0.5) * 20;
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+                particlesArray.push({ x, y, z, originalX: x, originalY: y, originalZ: z, velocityX: 0, velocityY: 0, velocityZ: 0 });
+            }
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const particlesMaterial = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.03, blending: THREE.AdditiveBlending, transparent: true, sizeAttenuation: true });
+            particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            scene.add(particles);
+
+            const lineGeometry = new THREE.BufferGeometry();
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending });
+            lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+            scene.add(lines);
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+            modeToggle.addEventListener('click', toggleMode);
+            
+            animate();
+        }
+
+        function toggleMode() {
+            isDayMode = !isDayMode;
+            document.body.classList.toggle('day-mode');
+            document.getElementById('sun-icon').classList.toggle('hidden');
+            document.getElementById('moon-icon').classList.toggle('hidden');
+            
+            const particleColor = isDayMode ? new THREE.Color(0xffa500) : new THREE.Color(0x00ffff);
+            const lineColor = isDayMode ? new THREE.Color(0xffd700) : new THREE.Color(0x00ffff);
+            particles.material.color.set(particleColor);
+            lines.material.color.set(lineColor);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const positions = particles.geometry.attributes.position.array;
+            const linePositions = [];
+            const mouse3D = new THREE.Vector3(mouse.x * 10, mouse.y * 10, 0);
+
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                const p = particlesArray[i];
+                const dx = mouse3D.x - p.x;
+                const dy = mouse3D.y - p.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 2) {
+                    const force = (2 - dist) * 0.03;
+                    p.velocityX += (p.x - mouse3D.x) * force;
+                    p.velocityY += (p.y - mouse3D.y) * force;
+                }
+                p.velocityX += (p.originalX - p.x) * 0.001;
+                p.velocityY += (p.originalY - p.y) * 0.001;
+                p.velocityZ += (p.originalZ - p.z) * 0.001;
+                p.x += p.velocityX; p.y += p.velocityY; p.z += p.velocityZ;
+                p.velocityX *= 0.95; p.velocityY *= 0.95; p.velocityZ *= 0.95;
+                positions[i * 3] = p.x; positions[i * 3 + 1] = p.y; positions[i * 3 + 2] = p.z;
+
+                for (let j = i + 1; j < PARTICLE_COUNT; j++) {
+                    const p2 = particlesArray[j];
+                    const d = Math.sqrt(Math.pow(p.x - p2.x, 2) + Math.pow(p.y - p2.y, 2) + Math.pow(p.z - p2.z, 2));
+                    if (d < LINE_DISTANCE_THRESHOLD) {
+                        linePositions.push(p.x, p.y, p.z, p2.x, p2.y, p2.z);
+                    }
+                }
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+            lines.geometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+            
+            camera.position.x += (mouse.x * 0.5 - camera.position.x) * 0.05;
+            camera.position.y += (mouse.y * 0.5 - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+            renderer.render(scene, camera);
+        }
+
+        // --- App Initialization ---
+        window.onload = () => {
+            init3D();
+            renderStudents();
+        };
+    </script>
+</body>
+</html>
